@@ -4,6 +4,7 @@ import com.axia.starter.export.Exporter;
 import com.axia.starter.export.PoiExporter;
 import com.axia.starter.specification.GenericSpecificationBuilder;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
@@ -17,11 +18,8 @@ public class GenericStarterAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnClass(name = "org.apache.poi.ss.usermodel.Workbook")
     public Exporter<?> defaultExporter() {
         return new PoiExporter<>(Object.class);
     }
-
-    // On ne peut pas créer un bean pour GenericService car il est abstrait
-    // C'est à l'utilisateur de l'étendre, donc pas de bean automatique.
 }
