@@ -2,12 +2,12 @@ package com.axia.starter.service;
 
 import com.axia.starter.repository.IGenericRepository;
 import com.axia.starter.mapper.BaseMapper;
+import com.axia.starter.request.CustomPageRequest;
 import com.axia.starter.specification.FilterRequest;
 import com.axia.starter.specification.GenericSpecificationBuilder;
 import com.axia.starter.export.Exporter;
 import com.axia.starter.specification.LogicalOperator;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,12 +20,12 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
     protected IGenericRepository<E, ID> repository;
     protected BaseMapper<E, D> mapper;
     protected GenericSpecificationBuilder<E> specificationBuilder;
-    protected Exporter<E> exporter;
+    protected Exporter<D> exporter;
 
     public GenericService(IGenericRepository<E, ID> repository,
                           BaseMapper<E, D> mapper,
                           GenericSpecificationBuilder<E> specificationBuilder,
-                          Exporter<E> exporter) {
+                          Exporter<D> exporter) {
         this.repository = repository;
         this.mapper = mapper;
         this.specificationBuilder = specificationBuilder;
@@ -65,46 +65,37 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
     }
 
     @Override
-    public List<D> list() {
-        return repository.findAll().stream()
+    public List<D> list(List<FilterRequest> filters) {
+            Specification<E> spec = specificationBuilder.build(filters);
+            return repository.findAll(spec).stream()
+                    .map(mapper::toDto)
+                    .map(this::afterFetch)
+                    .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<D> search(List<FilterRequest> filters, CustomPageRequest pageRequest) {
+        Specification<E> spec = specificationBuilder.build(filters);
+        return repository.findAll(spec, pageRequest.toPageable())
+                .map(mapper::toDto)
+                .map(this::afterFetch);
+    }
+
+    @Override
+    public Page<D> search(List<FilterRequest> filters, LogicalOperator operator, CustomPageRequest pageRequest) {
+        Specification<E> spec = specificationBuilder.build(filters, operator);
+        return repository.findAll(spec, pageRequest.toPageable())
+                .map(mapper::toDto)
+                .map(this::afterFetch);
+    }
+
+    @Override
+    public byte[] export(List<FilterRequest> filters) {
+        Specification<E> spec = specificationBuilder.build(filters);
+        List<D> entities = repository.findAll(spec).stream()
                 .map(mapper::toDto)
                 .map(this::afterFetch)
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public Page<D> paginate(Pageable pageable) {
-        return repository.findAll(pageable)
-                .map(mapper::toDto)
-                .map(this::afterFetch);
-    }
-
-    @Override
-    public Page<D> paginate(Pageable pageable, Specification<E> spec) {
-        return repository.findAll(spec, pageable)
-                .map(mapper::toDto)
-                .map(this::afterFetch);
-    }
-
-    @Override
-    public Page<D> search(List<FilterRequest> filters, Pageable pageable) {
-        Specification<E> spec = specificationBuilder.build(filters);
-        return repository.findAll(spec, pageable)
-                .map(mapper::toDto)
-                .map(this::afterFetch);
-    }
-
-    @Override
-    public Page<D> search(List<FilterRequest> filters, LogicalOperator operator, Pageable pageable) {
-        Specification<E> spec = specificationBuilder.build(filters, operator);
-        return repository.findAll(spec, pageable)
-                .map(mapper::toDto)
-                .map(this::afterFetch);
-    }
-
-    @Override
-    public byte[] export() {
-        List<E> entities = repository.findAll();
         return exporter.export(entities);
     }
 

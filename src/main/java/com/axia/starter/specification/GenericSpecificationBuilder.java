@@ -13,16 +13,7 @@ public class GenericSpecificationBuilder<E> {
      * Construit une Specification en combinant les filtres avec AND.
      */
     public Specification<E> build(List<FilterRequest> filters) {
-        return (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            for (FilterRequest filter : filters) {
-                Predicate predicate = createPredicate(filter, root, criteriaBuilder);
-                if (predicate != null) {
-                    predicates.add(predicate);
-                }
-            }
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        };
+        return  build(filters, LogicalOperator.AND);
     }
 
     /**

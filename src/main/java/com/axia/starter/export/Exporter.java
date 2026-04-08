@@ -2,6 +2,6 @@ package com.axia.starter.export;
 
 import java.util.List;
 
-public interface Exporter<E> {
-    byte[] export(List<E> entities);
+public interface Exporter<D> {
+    byte[] export(List<D> entities);
 }

@@ -13,6 +13,7 @@ public class CustomPageRequest {
     private int size = 10;
     private String sortBy = "id";
     private Sort.Direction direction = Sort.Direction.ASC;
+    private String query = "";
 
     public int getPage() {
         return page;
@@ -44,6 +45,14 @@ public class CustomPageRequest {
 
     public void setDirection(Sort.Direction direction) {
         this.direction = direction;
+    }
+
+    public String getQuery() {
+        return query;
+    }
+
+    public void setQuery(String query) {
+        this.query = query;
     }
 
     public Pageable toPageable() {
