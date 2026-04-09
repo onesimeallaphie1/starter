@@ -13,27 +13,27 @@ import java.util.*;
  * Exportateur Excel générique basé sur Apache POI.
  * Utilise les annotations @ExcelColumn si présentes, sinon exporte tous les champs.
  */
-public class PoiExporter<T> implements Exporter<T> {
+public class PoiExporter<D> implements Exporter<D> {
 
-    private final Class<T> entityClass;
+    private final Class<D> entityClass;
     private final String sheetName;
     private final boolean useStreaming; // Pour gros volumes
 
     /**
      * Constructeur par défaut. Nécessite de passer la classe de l'entité.
      */
-    public PoiExporter(Class<T> entityClass) {
+    public PoiExporter(Class<D> entityClass) {
         this(entityClass, "Sheet1", false);
     }
 
-    public PoiExporter(Class<T> entityClass, String sheetName, boolean useStreaming) {
+    public PoiExporter(Class<D> entityClass, String sheetName, boolean useStreaming) {
         this.entityClass = entityClass;
         this.sheetName = sheetName;
         this.useStreaming = useStreaming;
     }
 
     @Override
-    public byte[] export(List<T> entities) {
+    public byte[] export(List<D> entities) {
         // Déterminer les colonnes à exporter
         List<ColumnInfo> columns = resolveColumns();
 
@@ -52,7 +52,7 @@ public class PoiExporter<T> implements Exporter<T> {
 
             // Remplissage des données
             int rowNum = 1;
-            for (T entity : entities) {
+            for (D entity : entities) {
                 Row row = sheet.createRow(rowNum++);
                 for (int i = 0; i < columns.size(); i++) {
                     Object value = columns.get(i).getValue(entity);
@@ -92,19 +92,15 @@ public class PoiExporter<T> implements Exporter<T> {
     }
 
     private void setCellValue(Cell cell, Object value) {
-        if (value == null) {
-            cell.setCellValue("");
-        } else if (value instanceof String) {
-            cell.setCellValue((String) value);
-        } else if (value instanceof Number) {
-            cell.setCellValue(((Number) value).doubleValue());
-        } else if (value instanceof Boolean) {
-            cell.setCellValue((Boolean) value);
-        } else if (value instanceof Date) {
-            cell.setCellValue((Date) value);
+        switch (value) {
+            case null -> cell.setCellValue("");
+            case String s -> cell.setCellValue(s);
+            case Number number -> cell.setCellValue(number.doubleValue());
+            case Boolean b -> cell.setCellValue(b);
+            case Date date -> cell.setCellValue(date);
+
             // Optionnel : définir un style de date
-        } else {
-            cell.setCellValue(value.toString());
+            default -> cell.setCellValue(value.toString());
         }
     }
 

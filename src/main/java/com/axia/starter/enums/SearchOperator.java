@@ -1,5 +1,10 @@
 package com.axia.starter.enums;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@Getter
+@AllArgsConstructor
 public enum SearchOperator {
     EQUAL("eq"),
     NOT_EQUAL("neq"),
@@ -16,14 +21,6 @@ public enum SearchOperator {
     BETWEEN("between");
 
     private final String value;
-
-    SearchOperator(String value) {
-        this.value = value;
-    }
-
-    public String getValue() {
-        return value;
-    }
 
     public static SearchOperator fromValue(String value) {
         for (SearchOperator op : values()) {

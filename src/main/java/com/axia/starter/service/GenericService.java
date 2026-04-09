@@ -71,87 +71,22 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
 
     // ============ Méthodes avec SpecificationBuilder fluide (recommandé) ============
 
-    /**
-     * List entities using fluent SpecificationBuilder
-     *
-     * Example:
-     * list(builder -> builder
-     *     .eq("status", "ACTIVE")
-     *     .gt("age", 18)
-     * )
-     */
     @Override
     public List<D> list(Consumer<SpecificationBuilder.GroupBuilder<E>> builderConsumer) {
         SpecificationBuilder<E> builder = SpecificationBuilder.create();
         builderConsumer.accept(builder.and());
         Specification<E> spec = builder.build();
-
         return repository.findAll(spec).stream()
                 .map(mapper::toDto)
                 .map(this::afterFetch)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * List entities with custom root operator (AND/OR)
-     *
-     * Example:
-     * list(LogicalOperator.OR, builder -> builder
-     *     .eq("status", "ACTIVE")
-     *     .eq("status", "PENDING")
-     * )
-     */
     @Override
-    public List<D> list(LogicalOperator rootOperator, Consumer<SpecificationBuilder.GroupBuilder<E>> builderConsumer) {
-        SpecificationBuilder<E> builder = SpecificationBuilder.create();
-        if (rootOperator == LogicalOperator.OR) {
-            builderConsumer.accept(builder.or());
-        } else {
-            builderConsumer.accept(builder.and());
-        }
-        Specification<E> spec = builder.build();
-
-        return repository.findAll(spec).stream()
-                .map(mapper::toDto)
-                .map(this::afterFetch)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Search entities with pagination using fluent SpecificationBuilder
-     *
-     * Example:
-     * search(builder -> builder
-     *     .eq("status", "ACTIVE")
-     *     .gt("age", 18),
-     *     pageRequest
-     * )
-     */
-    @Override
-    public Page<D> search(Consumer<SpecificationBuilder.GroupBuilder<E>> builderConsumer,
+    public Page<D> paginate(Consumer<SpecificationBuilder.GroupBuilder<E>> builderConsumer,
                           CustomPageRequest pageRequest) {
         SpecificationBuilder<E> builder = SpecificationBuilder.create();
         builderConsumer.accept(builder.and());
-        Specification<E> spec = builder.build();
-
-        return repository.findAll(spec, pageRequest.toPageable())
-                .map(mapper::toDto)
-                .map(this::afterFetch);
-    }
-
-    /**
-     * Search with custom root operator and pagination
-     */
-    @Override
-    public Page<D> search(LogicalOperator rootOperator,
-                          Consumer<SpecificationBuilder.GroupBuilder<E>> builderConsumer,
-                          CustomPageRequest pageRequest) {
-        SpecificationBuilder<E> builder = SpecificationBuilder.create();
-        if (rootOperator == LogicalOperator.OR) {
-            builderConsumer.accept(builder.or());
-        } else {
-            builderConsumer.accept(builder.and());
-        }
         Specification<E> spec = builder.build();
 
         return repository.findAll(spec, pageRequest.toPageable())
@@ -193,7 +128,7 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
      * Search with ConditionGroup and pagination
      */
     @Override
-    public Page<D> search(ConditionGroup conditionGroup, CustomPageRequest pageRequest) {
+    public Page<D> paginate(ConditionGroup conditionGroup, CustomPageRequest pageRequest) {
         Specification<E> spec = genericSpecificationBuilder.build(conditionGroup);
         return repository.findAll(spec, pageRequest.toPageable())
                 .map(mapper::toDto)

@@ -62,6 +62,9 @@ public class GenericSpecificationBuilder<E> {
         if (!CollectionUtils.isEmpty(group.getConditions())) {
             for (FilterRequest filter : group.getConditions()) {
                 try {
+                    if(filter == null) {
+                        continue; // Skip null filters
+                    }
                     Predicate predicate = createPredicate(filter, root, cb);
                     if (predicate != null) {
                         predicates.add(predicate);
@@ -75,6 +78,9 @@ public class GenericSpecificationBuilder<E> {
         // Process nested groups recursively
         if (!CollectionUtils.isEmpty(group.getGroups())) {
             for (ConditionGroup subGroup : group.getGroups()) {
+                if(subGroup == null || subGroup.isEmpty()) {
+                    continue; // Skip empty subgroups
+                }
                 Predicate subPredicate = buildPredicateFromGroup(subGroup, root, cb);
                 if (subPredicate != null) {
                     predicates.add(subPredicate);
