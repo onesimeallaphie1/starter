@@ -1,4 +1,4 @@
-package com.axia.starter.specification;
+package com.axia.starter.enums;
 
 public enum LogicalOperator {
     AND, OR

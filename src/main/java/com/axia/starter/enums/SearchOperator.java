@@ -1,6 +1,6 @@
-package com.axia.starter.specification;
+package com.axia.starter.enums;
 
-public enum SearchOperation {
+public enum SearchOperator {
     EQUAL("eq"),
     NOT_EQUAL("neq"),
     LIKE("like"),
@@ -17,7 +17,7 @@ public enum SearchOperation {
 
     private final String value;
 
-    SearchOperation(String value) {
+    SearchOperator(String value) {
         this.value = value;
     }
 
@@ -25,8 +25,8 @@ public enum SearchOperation {
         return value;
     }
 
-    public static SearchOperation fromValue(String value) {
-        for (SearchOperation op : values()) {
+    public static SearchOperator fromValue(String value) {
+        for (SearchOperator op : values()) {
             if (op.value.equalsIgnoreCase(value)) {
                 return op;
             }

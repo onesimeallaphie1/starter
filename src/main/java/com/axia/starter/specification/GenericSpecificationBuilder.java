@@ -1,5 +1,10 @@
 package com.axia.starter.specification;
 
+import com.axia.starter.exceptions.SpecificationException;
+import com.axia.starter.request.FilterRequest;
+import com.axia.starter.request.ConditionGroup;
+import com.axia.starter.enums.LogicalOperator;
+import com.axia.starter.enums.SearchOperator;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.CollectionUtils;
 
@@ -10,93 +15,177 @@ import java.util.List;
 public class GenericSpecificationBuilder<E> {
 
     /**
-     * Construit une Specification en combinant les filtres avec AND.
+     * Build specification from condition group (supports nested AND/OR)
      */
-    public Specification<E> build(List<FilterRequest> filters) {
-        return  build(filters, LogicalOperator.AND);
-    }
+    public Specification<E> build(ConditionGroup conditionGroup) {
+        if (conditionGroup == null || conditionGroup.isEmpty()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
 
-    /**
-     * Construit une Specification avec un opérateur logique personnalisé (AND/OR).
-     */
-    public Specification<E> build(List<FilterRequest> filters, LogicalOperator operator) {
-        return (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            for (FilterRequest filter : filters) {
-                Predicate predicate = createPredicate(filter, root, criteriaBuilder);
-                if (predicate != null) {
-                    predicates.add(predicate);
-                }
+        return (root, query, cb) -> {
+            if (query != null) {
+                query.distinct(true); // Avoid duplicates with joins
             }
-            if (operator == LogicalOperator.OR) {
-                return criteriaBuilder.or(predicates.toArray(new Predicate[0]));
-            } else {
-                return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-            }
+            return buildPredicateFromGroup(conditionGroup, root, cb);
         };
     }
 
     /**
-     * Crée un prédicat pour un filtre donné.
+     * Build specification from simple filter list (backward compatible)
      */
-    @SuppressWarnings("unchecked")
+    public Specification<E> build(List<FilterRequest> filters) {
+        return build(filters, LogicalOperator.AND);
+    }
+
+    /**
+     * Build specification from filter list with custom operator (backward compatible)
+     */
+    public Specification<E> build(List<FilterRequest> filters, LogicalOperator operator) {
+        if (CollectionUtils.isEmpty(filters)) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+
+        ConditionGroup group = ConditionGroup.builder()
+                .operator(operator)
+                .conditions(filters)
+                .build();
+        return build(group);
+    }
+
+    /**
+     * Recursively build predicate from condition group
+     */
+    private Predicate buildPredicateFromGroup(ConditionGroup group, Root<E> root, CriteriaBuilder cb) {
+        List<Predicate> predicates = new ArrayList<>();
+
+        // Process simple conditions
+        if (!CollectionUtils.isEmpty(group.getConditions())) {
+            for (FilterRequest filter : group.getConditions()) {
+                try {
+                    Predicate predicate = createPredicate(filter, root, cb);
+                    if (predicate != null) {
+                        predicates.add(predicate);
+                    }
+                } catch (Exception e) {
+                    throw new SpecificationException("Failed to create predicate for field: " + filter.getField(), e);
+                }
+            }
+        }
+
+        // Process nested groups recursively
+        if (!CollectionUtils.isEmpty(group.getGroups())) {
+            for (ConditionGroup subGroup : group.getGroups()) {
+                Predicate subPredicate = buildPredicateFromGroup(subGroup, root, cb);
+                if (subPredicate != null) {
+                    predicates.add(subPredicate);
+                }
+            }
+        }
+
+        if (predicates.isEmpty()) {
+            return cb.conjunction();
+        }
+
+        // Apply logical operator
+        if (group.getOperator() == LogicalOperator.OR) {
+            return cb.or(predicates.toArray(new Predicate[0]));
+        } else {
+            return cb.and(predicates.toArray(new Predicate[0]));
+        }
+    }
+
+    /**
+     * Create a single predicate from filter request
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate createPredicate(FilterRequest filter, Root<E> root, CriteriaBuilder cb) {
         String field = filter.getField();
-        SearchOperation op = filter.getOperation();
+        SearchOperator op = filter.getOperation();
         Object value = filter.getValue();
         Object secondValue = filter.getSecondValue();
         List<Object> values = filter.getValues();
 
         Path<Object> path = getPath(root, field);
 
-        switch (op) {
-            case EQUAL:
-                return cb.equal(path, value);
-            case NOT_EQUAL:
-                return cb.notEqual(path, value);
-            case LIKE:
-                return cb.like(cb.lower(path.as(String.class)), "%" + value.toString().toLowerCase() + "%");
-            case NOT_LIKE:
-                return cb.notLike(cb.lower(path.as(String.class)), "%" + value.toString().toLowerCase() + "%");
-            case GREATER_THAN:
-                return cb.greaterThan(path.as(Comparable.class), (Comparable) value);
-            case GREATER_THAN_OR_EQUAL:
-                return cb.greaterThanOrEqualTo(path.as(Comparable.class), (Comparable) value);
-            case LESS_THAN:
-                return cb.lessThan(path.as(Comparable.class), (Comparable) value);
-            case LESS_THAN_OR_EQUAL:
-                return cb.lessThanOrEqualTo(path.as(Comparable.class), (Comparable) value);
-            case IN:
-                if (!CollectionUtils.isEmpty(values)) {
-                    return path.in(values);
-                }
-                return null;
-            case NOT_IN:
-                if (!CollectionUtils.isEmpty(values)) {
-                    return cb.not(path.in(values));
-                }
-                return null;
-            case IS_NULL:
-                return cb.isNull(path);
-            case IS_NOT_NULL:
-                return cb.isNotNull(path);
-            case BETWEEN:
-                if (value != null && secondValue != null) {
-                    return cb.between(path.as(Comparable.class), (Comparable) value, (Comparable) secondValue);
-                }
-                return null;
-            default:
-                throw new UnsupportedOperationException("Opérateur non supporté : " + op);
-        }
+        return switch (op) {
+            case EQUAL -> handleNullValue(path, cb, value, true);
+            case NOT_EQUAL -> handleNullValue(path, cb, value, false);
+            case LIKE -> {
+                if (value == null) yield null;
+                yield cb.like(cb.lower(path.as(String.class)), "%" + value.toString().toLowerCase() + "%");
+            }
+            case NOT_LIKE -> {
+                if (value == null) yield null;
+                yield cb.notLike(cb.lower(path.as(String.class)), "%" + value.toString().toLowerCase() + "%");
+            }
+            case GREATER_THAN -> {
+                if (value == null) yield null;
+                yield cb.greaterThan(path.as(Comparable.class), (Comparable) value);
+            }
+            case GREATER_THAN_OR_EQUAL -> {
+                if (value == null) yield null;
+                yield cb.greaterThanOrEqualTo(path.as(Comparable.class), (Comparable) value);
+            }
+            case LESS_THAN -> {
+                if (value == null) yield null;
+                yield cb.lessThan(path.as(Comparable.class), (Comparable) value);
+            }
+            case LESS_THAN_OR_EQUAL -> {
+                if (value == null) yield null;
+                yield cb.lessThanOrEqualTo(path.as(Comparable.class), (Comparable) value);
+            }
+            case IN -> {
+                if (CollectionUtils.isEmpty(values)) yield null;
+                yield handleInOperation(path, values, cb);
+            }
+            case NOT_IN -> {
+                if (CollectionUtils.isEmpty(values)) yield null;
+                yield cb.not(handleInOperation(path, values, cb));
+            }
+            case IS_NULL -> cb.isNull(path);
+            case IS_NOT_NULL -> cb.isNotNull(path);
+            case BETWEEN -> {
+                if (value == null || secondValue == null) yield null;
+                yield cb.between(path.as(Comparable.class), (Comparable) value, (Comparable) secondValue);
+            }
+        };
     }
 
     /**
-     * Résout le chemin JPA, en gérant les jointures implicites (ex: "adresse.ville").
+     * Handle IN operation with proper type conversion
+     */
+    private Predicate handleInOperation(Path<Object> path, List<Object> values, CriteriaBuilder cb) {
+        CriteriaBuilder.In<Object> in = cb.in(path);
+        for (Object val : values) {
+            if (val != null) {
+                in.value(val);
+            }
+        }
+        return in;
+    }
+
+    /**
+     * Handle null values for EQUAL/NOT_EQUAL operations
+     */
+    private Predicate handleNullValue(Path<Object> path, CriteriaBuilder cb, Object value, boolean isEqual) {
+        if (value == null) {
+            return isEqual ? cb.isNull(path) : cb.isNotNull(path);
+        }
+        return isEqual ? cb.equal(path, value) : cb.notEqual(path, value);
+    }
+
+    /**
+     * Resolve JPA path supporting nested fields (e.g., "address.city")
      */
     private Path<Object> getPath(Root<E> root, String field) {
+        if (field == null || field.trim().isEmpty()) {
+            throw new SpecificationException("Field name cannot be null or empty");
+        }
+
         if (!field.contains(".")) {
             return root.get(field);
         }
+
         String[] parts = field.split("\\.");
         Path<Object> path = root.get(parts[0]);
         for (int i = 1; i < parts.length; i++) {
