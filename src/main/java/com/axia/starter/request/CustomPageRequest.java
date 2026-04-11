@@ -21,6 +21,7 @@ public class CustomPageRequest {
     private int size = 10;
     private String sortBy = "id";
     private Sort.Direction direction = Sort.Direction.ASC;
+    private String query = "";
     public Pageable toPageable() {
         return PageRequest.of(page, size, Sort.by(direction, sortBy));
     }

@@ -3,14 +3,10 @@ package com.axia.starter.service;
 import com.axia.starter.repository.IGenericRepository;
 import com.axia.starter.mapper.BaseMapper;
 import com.axia.starter.request.CustomPageRequest;
-import com.axia.starter.request.SearchRequest;
 import com.axia.starter.request.ConditionGroup;
-import com.axia.starter.request.FilterRequest;
 import com.axia.starter.specification.SpecificationBuilder;
 import com.axia.starter.specification.GenericSpecificationBuilder;
 import com.axia.starter.export.Exporter;
-import com.axia.starter.enums.LogicalOperator;
-import com.axia.starter.enums.SearchOperator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,22 +47,30 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         beforeCreate(dto);
         E entity = mapper.toEntity(dto);
         E saved = repository.save(entity);
-        return mapper.toDto(saved);
+        D savedDto = mapper.toDto(saved);
+        afterCreate(saved, savedDto);
+        return savedDto;
     }
 
     @Override
     public D update(ID id, D dto) {
         E entity = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Entity not found"));
-        beforeUpdate(entity, dto);
         mapper.updateEntityFromDto(dto, entity);
+        beforeUpdate(entity, dto);
         E updated = repository.save(entity);
-        return mapper.toDto(updated);
+        D updatedDto = mapper.toDto(updated);
+        afterUpdate(updated, updatedDto);
+        return updatedDto;
     }
 
     @Override
     public void delete(ID id) {
+        E entity = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Entity not found"));
+        beforeDelete(entity);
         repository.deleteById(id);
+        afterDelete(entity);
     }
 
     // ============ Méthodes avec SpecificationBuilder fluide (recommandé) ============
@@ -148,74 +152,13 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         return exporter.export(entities);
     }
 
-    // ============ Méthodes utilitaires ============
-
-    /**
-     * Create a new SpecificationBuilder instance
-     */
-    protected SpecificationBuilder<E> createSpecificationBuilder() {
-        return SpecificationBuilder.create();
-    }
-
-    /**
-     * Build specification from SearchRequest (legacy)
-     */
-    protected Specification<E> buildSpecificationFromSearchRequest(SearchRequest searchRequest) {
-        if (searchRequest == null) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-
-        // Use ConditionGroup if present
-        if (searchRequest.getConditionGroup() != null) {
-            return genericSpecificationBuilder.build(searchRequest.getConditionGroup());
-        }
-
-        // Fallback to simple filters
-        if (searchRequest.getFilters() != null && !searchRequest.getFilters().isEmpty()) {
-            LogicalOperator operator = searchRequest.getOperator() != null ?
-                    searchRequest.getOperator() : LogicalOperator.AND;
-            return genericSpecificationBuilder.build(searchRequest.getFilters(), operator);
-        }
-
-        return (root, query, cb) -> cb.conjunction();
-    }
-
-    /**
-     * Helper method to create simple equality filter
-     */
-    protected FilterRequest eq(String field, Object value) {
-        return FilterRequest.builder()
-                .field(field)
-                .operation(SearchOperator.EQUAL)
-                .value(value)
-                .build();
-    }
-
-    /**
-     * Helper method to create simple like filter
-     */
-    protected FilterRequest like(String field, String value) {
-        return FilterRequest.builder()
-                .field(field)
-                .operation(SearchOperator.LIKE)
-                .value(value)
-                .build();
-    }
-
-    /**
-     * Helper method to create simple greater than filter
-     */
-    protected FilterRequest gt(String field, Comparable<?> value) {
-        return FilterRequest.builder()
-                .field(field)
-                .operation(SearchOperator.GREATER_THAN)
-                .value(value)
-                .build();
-    }
-
     // Hooks
     protected void beforeCreate(D dto) {}
+    protected void afterCreate(E entity, D dto) {}
     protected void beforeUpdate(E entity, D dto) {}
+    protected void afterUpdate(E entity, D dto) {}
+    protected void beforeDelete(E entity) {}
+    protected void afterDelete(E entity) {}
     protected D afterFetch(D dto) {
         return dto;
     }
