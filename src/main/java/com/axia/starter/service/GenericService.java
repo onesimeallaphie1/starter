@@ -38,8 +38,7 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         E entity = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Entity not found"));
         D dto = mapper.toDto(entity);
-        afterFetch(dto);
-        return dto;
+        return afterFetch(dto);
     }
 
     @Override
@@ -48,7 +47,7 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         E entity = mapper.toEntity(dto);
         E saved = repository.save(entity);
         D savedDto = mapper.toDto(saved);
-        afterCreate(saved, savedDto);
+        afterCreate(saved, dto);
         return savedDto;
     }
 
@@ -60,7 +59,7 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         beforeUpdate(entity, dto);
         E updated = repository.save(entity);
         D updatedDto = mapper.toDto(updated);
-        afterUpdate(updated, updatedDto);
+        afterUpdate(updated, dto);
         return updatedDto;
     }
 
@@ -92,7 +91,6 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         SpecificationBuilder<E> builder = SpecificationBuilder.create();
         builderConsumer.accept(builder.and());
         Specification<E> spec = builder.build();
-
         return repository.findAll(spec, pageRequest.toPageable())
                 .map(mapper::toDto)
                 .map(this::afterFetch);
@@ -106,7 +104,6 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
         SpecificationBuilder<E> builder = SpecificationBuilder.create();
         builderConsumer.accept(builder.and());
         Specification<E> spec = builder.build();
-
         List<D> entities = repository.findAll(spec).stream()
                 .map(mapper::toDto)
                 .map(this::afterFetch)
@@ -154,10 +151,10 @@ public abstract class GenericService<E, D, ID> implements IService<E, D, ID> {
 
     // Hooks
     protected void beforeCreate(D dto) {}
-    protected void afterCreate(E entity, D dto) {}
-    protected void beforeUpdate(E entity, D dto) {}
-    protected void afterUpdate(E entity, D dto) {}
-    protected void beforeDelete(E entity) {}
+    protected void afterCreate(E created, D dto) {}
+    protected void beforeUpdate(E toUpdate, D dto) {}
+    protected void afterUpdate(E updated, D dto) {}
+    protected void beforeDelete(E toDelete) {}
     protected void afterDelete(E entity) {}
     protected D afterFetch(D dto) {
         return dto;
